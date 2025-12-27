@@ -1,0 +1,1265 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>PSKUY ULTRA — TITAN</title>
+
+<!-- ===== STYLE CORE ===== -->
+<style>
+:root{
+  --bg:#05060f;
+  --panel:#0b0e22;
+  --glass:rgba(20,24,58,.85);
+  --border:rgba(255,255,255,.08);
+  --text:#f3f5ff;
+  --muted:#9aa3ff;
+  --gold:#d6b36a;
+  --gold-soft:#ffe4a3;
+}
+
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{
+  width:100%;height:100%;
+  font-family:Inter,system-ui,Arial;
+  background:radial-gradient(circle at top,#11153a,#05060f 65%);
+  color:var(--text);
+}
+
+/* ===== BASIC ===== */
+.hidden{display:none}
+button{
+  border:none;border-radius:14px;
+  padding:12px 16px;
+  font-weight:600;
+  cursor:pointer;
+}
+.btn-gold{
+  background:linear-gradient(135deg,var(--gold),var(--gold-soft));
+  color:#000;
+}
+.btn-dark{
+  background:rgba(255,255,255,.08);
+  color:var(--text);
+  border:1px solid var(--border);
+}
+input{
+  padding:12px;
+  border-radius:12px;
+  border:1px solid var(--border);
+  background:rgba(255,255,255,.06);
+  color:var(--text);
+}
+.card{
+  background:var(--glass);
+  border:1px solid var(--border);
+  border-radius:18px;
+  padding:18px;
+}
+
+/* ===== LAYOUT ===== */
+.app{
+  display:flex;
+  height:100vh;
+}
+.sidebar{
+  width:240px;
+  padding:18px;
+  background:linear-gradient(180deg,#0b0e22,#05060f);
+}
+.menu button{
+  width:100%;
+  margin-bottom:8px;
+}
+.main{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+}
+.header{
+  height:60px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:0 18px;
+  border-bottom:1px solid var(--border);
+}
+.content{
+  flex:1;
+  overflow:auto;
+  padding:18px;
+}
+.page{display:none}
+.page.active{display:block}
+</style>
+</head>
+
+<body>
+
+<!-- ================= LOGIN ================= -->
+<div id="loginScreen" style="height:100vh;display:flex;align-items:center;justify-content:center">
+  <div class="card" style="width:320px">
+    <h2 style="text-align:center;color:var(--gold)">PSKUY LOGIN</h2>
+    <input id="loginUser" placeholder="Username" style="width:100%;margin-top:12px">
+    <input id="loginPass" type="password" placeholder="Password" style="width:100%;margin-top:10px">
+    <button class="btn-gold" style="width:100%;margin-top:14px" onclick="login()">LOGIN</button>
+  </div>
+</div>
+
+<!-- ================= APP ================= -->
+<div class="app hidden" id="app">
+
+  <aside class="sidebar">
+    <b style="color:var(--gold)">PSKUY TITAN</b><br><br>
+    <div class="menu">
+      <button onclick="goPage('dashboard')">Dashboard</button>
+      <button onclick="goPage('room')">Room</button>
+      <button onclick="goPage('pos')">POS</button>
+      <button onclick="goPage('inventory')">Inventory</button>
+      <button onclick="goPage('member')">Member</button>
+      <button onclick="goPage('report')">Report</button>
+      <button onclick="logout()">Logout</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="header">
+      <b id="pageTitle">Dashboard</b>
+      <span id="userInfo"></span>
+    </div>
+
+    <div class="content">
+      <div id="dashboard" class="page active"></div>
+      <div id="room" class="page"></div>
+      <div id="pos" class="page"></div>
+      <div id="inventory" class="page"></div>
+      <div id="member" class="page"></div>
+      <div id="report" class="page"></div>
+    </div>
+  </main>
+
+</div>
+
+<!-- ===== CORE SCRIPT ===== -->
+<script src="core.js"></script>
+<script src="titan.guard.js"></script>
+<script src="room.js"></script>
+<script src="pos.js"></script>
+<script src="inventory.js"></script>
+<script src="member.js"></script>
+<script src="report.js"></script>
+<script src="titan.autosave.js"></script>
+<script src="final.integrations.js"></script>
+
+</body>
+</html>
+/* ================= CORE UTILS ================= */
+const $ = id => document.getElementById(id);
+const rupiah = n => "Rp " + Number(n||0).toLocaleString("id-ID");
+
+/* ================= AUTH ================= */
+const USERS = [
+  {u:"admin",p:"123456",role:"admin"},
+  {u:"kasir",p:"111111",role:"kasir"}
+];
+
+let SESSION = JSON.parse(localStorage.getItem("SESSION"));
+
+function login(){
+  const u = loginUser.value.trim();
+  const p = loginPass.value.trim();
+  const f = USERS.find(x=>x.u===u && x.p===p);
+  if(!f) return alert("Login gagal");
+  SESSION = f;
+  localStorage.setItem("SESSION", JSON.stringify(f));
+  initApp();
+}
+
+function logout(){
+  localStorage.removeItem("SESSION");
+  location.reload();
+}
+
+function initApp(){
+  if(!SESSION){
+    $("loginScreen").classList.remove("hidden");
+    return;
+  }
+  $("loginScreen").classList.add("hidden");
+  $("app").classList.remove("hidden");
+  $("userInfo").innerText = SESSION.u+" ("+SESSION.role+")";
+  renderDashboard();
+}
+
+initApp();
+
+/* ================= NAV ================= */
+function goPage(id){
+  document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));
+  $(id).classList.add("active");
+  $("pageTitle").innerText = id.toUpperCase();
+}
+
+/* ================= DASHBOARD ================= */
+let OMZET = 0;
+function renderDashboard(){
+  $("dashboard").innerHTML = `
+    <div class="card">
+      <h3>Dashboard</h3>
+      <p>Omzet: <b>${rupiah(OMZET)}</b></p>
+    </div>
+  `;
+}
+/* ===================================================
+   TITAN GUARD
+   - Device ID
+   - Safe boot
+   - Anti blank screen
+   - Role helper
+=================================================== */
+
+/* ================= DEVICE ID ================= */
+const TITAN = window.TITAN || {};
+TITAN.deviceId = (() => {
+  let id = localStorage.getItem("TITAN_DEVICE_ID");
+  if(!id){
+    id = "TITAN-" + Math.random().toString(36).slice(2,10).toUpperCase();
+    localStorage.setItem("TITAN_DEVICE_ID", id);
+  }
+  return id;
+})();
+console.log("[TITAN] DEVICE:", TITAN.deviceId);
+
+/* ================= SAFE BOOT ================= */
+(function safeBoot(){
+  try{
+    localStorage.setItem("__titan_test","1");
+    localStorage.removeItem("__titan_test");
+  }catch(e){
+    document.body.innerHTML = `
+      <div style="
+        height:100vh;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        background:#000;
+        color:red;
+        font-family:monospace;
+      ">
+        <h2>STORAGE ERROR — TITAN LOCK</h2>
+      </div>
+    `;
+  }
+})();
+
+/* ================= ROLE HELPERS ================= */
+function isAdmin(){
+  return window.SESSION && SESSION.role === "admin";
+}
+function isKasir(){
+  return window.SESSION && SESSION.role === "kasir";
+}
+
+/* ================= ERROR GUARD ================= */
+window.addEventListener("error", e=>{
+  console.error("[TITAN ERROR]", e.message);
+});
+
+window.addEventListener("unhandledrejection", e=>{
+  console.error("[TITAN PROMISE ERROR]", e.reason);
+});
+
+/* ================= SANITY CHECK ================= */
+setTimeout(()=>{
+  if(!document.getElementById("app")){
+    console.warn("[TITAN] APP ROOT NOT FOUND");
+  }
+  if(!window.renderDashboard){
+    console.warn("[TITAN] CORE NOT READY");
+  }
+},1000);
+/* ===================================================
+   ROOM CONTROL — TITAN
+   - PS4 / PS5
+   - Timer per detik
+   - Billing akurat
+   - Recovery reload
+   - Hook ke Dashboard
+=================================================== */
+
+/* ================= CONFIG ================= */
+const ROOM_RATE = {
+  ps4: 8000,   // per jam
+  ps5: 15000
+};
+
+/* ================= STATE ================= */
+const ROOMS = JSON.parse(localStorage.getItem("ROOMS")) ||
+  Array.from({length:10}, (_,i)=>({
+    id: i+1,
+    type: "ps4",
+    status: "IDLE", // IDLE | RUN
+    startAt: null,  // timestamp
+    duration: 0,    // seconds
+    total: 0        // rupiah
+  }));
+
+/* ================= UTIL ================= */
+function secToTime(sec){
+  const h = Math.floor(sec/3600);
+  const m = Math.floor((sec%3600)/60);
+  const s = sec % 60;
+  return (h? h+":" : "") + String(m).padStart(2,"0") + ":" + String(s).padStart(2,"0");
+}
+
+function saveRooms(){
+  localStorage.setItem("ROOMS", JSON.stringify(ROOMS));
+}
+
+/* ================= RENDER ================= */
+function renderRoom(){
+  const el = document.getElementById("room");
+  if(!el) return;
+
+  el.innerHTML = `
+    <div class="card">
+      <h3>🎮 Room Control</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
+        ${ROOMS.map(r=>`
+          <div class="card" style="background:rgba(255,255,255,.05)">
+            <b>Room ${r.id}</b><br>
+            <small>Status: <b>${r.status}</b></small><br><br>
+
+            Tipe:
+            <select ${r.status==="RUN"?"disabled":""}
+              onchange="setRoomType(${r.id}, this.value)">
+              <option value="ps4" ${r.type==="ps4"?"selected":""}>PS4</option>
+              <option value="ps5" ${r.type==="ps5"?"selected":""}>PS5</option>
+            </select>
+
+            <div style="margin-top:8px">
+              ⏱ ${secToTime(r.duration)}<br>
+              💰 ${rupiah(Math.round(r.total))}
+            </div>
+
+            <div style="display:flex;gap:6px;margin-top:8px">
+              <button class="btn-dark" onclick="startRoom(${r.id})">Start</button>
+              <button class="btn-dark" onclick="stopRoom(${r.id})">Stop</button>
+              <button class="btn-dark" onclick="resetRoom(${r.id})">Reset</button>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
+/* ================= ACTIONS ================= */
+function setRoomType(id, type){
+  const r = ROOMS.find(x=>x.id===id);
+  if(!r || r.status==="RUN") return;
+  r.type = type;
+  saveRooms();
+}
+
+function startRoom(id){
+  const r = ROOMS.find(x=>x.id===id);
+  if(!r || r.status==="RUN") return;
+
+  r.status = "RUN";
+  r.startAt = Date.now() - (r.duration * 1000);
+  saveRooms();
+  tickRoom(r);
+  renderRoom();
+}
+
+function stopRoom(id){
+  const r = ROOMS.find(x=>x.id===id);
+  if(!r || r.status!=="RUN") return;
+
+  r.status = "IDLE";
+  r.startAt = null;
+
+  // tambah omzet global
+  if(typeof OMZET !== "undefined"){
+    OMZET += Math.round(r.total);
+    renderDashboard();
+  }
+
+  // reset nilai setelah stop
+  r.duration = 0;
+  r.total = 0;
+
+  saveRooms();
+  renderRoom();
+}
+
+function resetRoom(id){
+  const r = ROOMS.find(x=>x.id===id);
+  if(!r) return;
+  r.status = "IDLE";
+  r.startAt = null;
+  r.duration = 0;
+  r.total = 0;
+  saveRooms();
+  renderRoom();
+}
+
+/* ================= TICK ENGINE ================= */
+function tickRoom(room){
+  if(room._timer) return;
+
+  room._timer = setInterval(()=>{
+    if(room.status!=="RUN"){
+      clearInterval(room._timer);
+      room._timer = null;
+      return;
+    }
+    room.duration = Math.floor((Date.now() - room.startAt)/1000);
+    room.total = (ROOM_RATE[room.type] / 3600) * room.duration;
+    saveRooms();
+    renderRoom();
+  }, 1000);
+}
+
+/* ================= RECOVERY ================= */
+function recoverRooms(){
+  ROOMS.forEach(r=>{
+    if(r.status==="RUN"){
+      tickRoom(r);
+    }
+  });
+}
+
+/* ================= INIT ================= */
+document.addEventListener("DOMContentLoaded", ()=>{
+  renderRoom();
+  recoverRooms();
+});
+/* ===================================================
+   POS SYSTEM — TITAN
+   - Cart
+   - Inventory source (sementara internal)
+   - Preview struk sebelum print
+   - Print thermal ready
+   - Hook ke Dashboard (OMZET)
+=================================================== */
+
+/* ================= INVENTORY SOURCE (SIMPLE) =================
+   NOTE:
+   - Nanti inventory.js akan override & sync
+*/
+let INVENTORY_POS = JSON.parse(localStorage.getItem("INVENTORY_POS")) || [
+  {id:1, name:"Minuman", price:5000, stock:50},
+  {id:2, name:"Snack", price:7000, stock:40},
+  {id:3, name:"Mie", price:12000, stock:30}
+];
+
+/* ================= POS STATE ================= */
+let POS = {
+  cart: [],
+  total: 0
+};
+
+/* ================= RENDER POS ================= */
+function renderPOS(){
+  const el = document.getElementById("pos");
+  if(!el) return;
+
+  el.innerHTML = `
+    <div class="card">
+      <h3>🛒 POS</h3>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <select id="posItem">
+          ${INVENTORY_POS.map((i,idx)=>`
+            <option value="${idx}">
+              ${i.name} — ${rupiah(i.price)} (stok ${i.stock})
+            </option>
+          `).join("")}
+        </select>
+
+        <input id="posQty" type="number" min="1" value="1" style="width:80px">
+        <button class="btn-gold" onclick="addToCart()">Tambah</button>
+      </div>
+
+      <table style="width:100%;margin-top:12px;border-collapse:collapse">
+        <thead>
+          <tr>
+            <th align="left">Item</th>
+            <th>Qty</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody id="posCart"></tbody>
+      </table>
+
+      <div style="margin-top:10px;font-size:18px">
+        Total: <b>${rupiah(POS.total)}</b>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn-gold" onclick="openStrukPreview()">Bayar</button>
+        <button class="btn-dark" onclick="resetPOS()">Reset</button>
+      </div>
+    </div>
+  `;
+
+  renderCart();
+}
+
+/* ================= CART ================= */
+function addToCart(){
+  const idx = +document.getElementById("posItem").value;
+  const qty = +document.getElementById("posQty").value;
+  const item = INVENTORY_POS[idx];
+  if(!item || qty<=0) return;
+
+  if(item.stock < qty){
+    alert("Stok tidak cukup");
+    return;
+  }
+
+  item.stock -= qty;
+
+  POS.cart.push({
+    name: item.name,
+    qty,
+    price: item.price,
+    total: item.price * qty
+  });
+
+  calculateTotal();
+  savePOS();
+  renderPOS();
+}
+
+function renderCart(){
+  const body = document.getElementById("posCart");
+  if(!body) return;
+
+  body.innerHTML = "";
+  POS.cart.forEach(i=>{
+    body.innerHTML += `
+      <tr>
+        <td>${i.name}</td>
+        <td align="center">${i.qty}</td>
+        <td align="right">${rupiah(i.total)}</td>
+      </tr>
+    `;
+  });
+}
+
+function calculateTotal(){
+  POS.total = POS.cart.reduce((s,i)=>s+i.total,0);
+}
+
+/* ================= RESET ================= */
+function resetPOS(){
+  POS.cart = [];
+  POS.total = 0;
+  savePOS();
+  renderPOS();
+}
+
+/* ================= STORAGE ================= */
+function savePOS(){
+  localStorage.setItem("POS_STATE", JSON.stringify(POS));
+  localStorage.setItem("INVENTORY_POS", JSON.stringify(INVENTORY_POS));
+}
+
+/* ================= LOAD ================= */
+(function loadPOS(){
+  const saved = JSON.parse(localStorage.getItem("POS_STATE"));
+  if(saved){
+    POS = saved;
+    calculateTotal();
+  }
+})();
+
+/* ===================================================
+   STRUK PREVIEW ENGINE (TITAN)
+=================================================== */
+
+/* ===== MODAL HTML ===== */
+(function injectStrukModal(){
+  const div = document.createElement("div");
+  div.innerHTML = `
+    <div id="strukModal" style="
+      position:fixed;inset:0;
+      background:rgba(0,0,0,.65);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      z-index:9999;
+    ">
+      <div style="
+        width:320px;
+        background:#fff;
+        color:#000;
+        border-radius:12px;
+        padding:14px;
+        font-family:monospace;
+      ">
+        <h3 style="text-align:center">PSKUY ULTRA</h3>
+        <div id="strukBody"></div>
+        <hr style="border-top:1px dashed #000">
+        <div style="display:flex;justify-content:space-between">
+          <b>TOTAL</b>
+          <b id="strukTotal">Rp 0</b>
+        </div>
+
+        <button style="width:100%;margin-top:8px" onclick="confirmPrint()">
+          PRINT
+        </button>
+        <button style="width:100%;margin-top:6px" onclick="closeStruk()">
+          BATAL
+        </button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(div);
+})();
+
+/* ===== OPEN PREVIEW ===== */
+function openStrukPreview(){
+  if(POS.cart.length===0){
+    alert("Cart kosong");
+    return;
+  }
+
+  const body = document.getElementById("strukBody");
+  const totalEl = document.getElementById("strukTotal");
+
+  body.innerHTML = "";
+  POS.cart.forEach(i=>{
+    body.innerHTML += `
+      <div style="display:flex;justify-content:space-between;font-size:12px">
+        <span>${i.name} x${i.qty}</span>
+        <span>${rupiah(i.total)}</span>
+      </div>
+    `;
+  });
+
+  totalEl.innerText = rupiah(POS.total);
+  document.getElementById("strukModal").style.display = "flex";
+}
+
+/* ===== CLOSE PREVIEW ===== */
+function closeStruk(){
+  document.getElementById("strukModal").style.display = "none";
+}
+
+/* ===== CONFIRM PRINT ===== */
+function confirmPrint(){
+  // print window
+  const w = window.open("", "PRINT", "width=380,height=600");
+  w.document.write(`
+    <html><body style="font-family:monospace;font-size:12px">
+      <h3 style="text-align:center">PSKUY ULTRA</h3>
+      ${document.getElementById("strukBody").innerHTML}
+      <hr>
+      <b>TOTAL: ${rupiah(POS.total)}</b><br><br>
+      ${new Date().toLocaleString()}
+      <script>window.print();<\/script>
+    </body></html>
+  `);
+  w.document.close();
+
+  // tambah omzet global
+  if(typeof OMZET !== "undefined"){
+    OMZET += POS.total;
+    renderDashboard();
+  }
+
+  resetPOS();
+  closeStruk();
+}
+
+/* ================= INIT ================= */
+document.addEventListener("DOMContentLoaded", ()=>{
+  renderPOS();
+});
+/* ===================================================
+   INVENTORY MANAGEMENT — TITAN
+   - CRUD item
+   - Stok & harga
+   - Sync ke POS (INVENTORY_POS)
+   - Admin-only
+=================================================== */
+
+/* ================= STATE ================= */
+let INVENTORY = JSON.parse(localStorage.getItem("INVENTORY")) || [
+  {id:1, name:"Minuman", price:5000, stock:50},
+  {id:2, name:"Snack", price:7000, stock:40},
+  {id:3, name:"Mie", price:12000, stock:30}
+];
+
+/* ================= UTIL ================= */
+function saveInventory(){
+  localStorage.setItem("INVENTORY", JSON.stringify(INVENTORY));
+  // sinkron ke POS source
+  window.INVENTORY_POS = INVENTORY.map(i=>({ ...i }));
+  localStorage.setItem("INVENTORY_POS", JSON.stringify(INVENTORY_POS));
+}
+
+/* ================= RENDER ================= */
+function renderInventory(){
+  const el = document.getElementById("inventory");
+  if(!el) return;
+
+  if(!isAdmin()){
+    el.innerHTML = `
+      <div class="card">
+        <h3>📦 Inventory</h3>
+        <p>Akses inventory hanya untuk <b>Admin</b>.</p>
+      </div>
+    `;
+    return;
+  }
+
+  el.innerHTML = `
+    <div class="card">
+      <h3>📦 Inventory Management</h3>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <input id="invName" placeholder="Nama Item">
+        <input id="invPrice" type="number" placeholder="Harga">
+        <input id="invStock" type="number" placeholder="Stok">
+        <button class="btn-gold" onclick="addInventory()">Tambah</button>
+      </div>
+
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr>
+            <th align="left">Item</th>
+            <th>Harga</th>
+            <th>Stok</th>
+            <th>Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${INVENTORY.map((i,idx)=>`
+            <tr>
+              <td>${i.name}</td>
+              <td align="right">${rupiah(i.price)}</td>
+              <td align="center">${i.stock}</td>
+              <td align="center">
+                <button class="btn-dark" onclick="editInventory(${idx})">Edit</button>
+                <button class="btn-dark" onclick="deleteInventory(${idx})">Hapus</button>
+              </td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+/* ================= CRUD ================= */
+function addInventory(){
+  const name = document.getElementById("invName").value.trim();
+  const price = +document.getElementById("invPrice").value;
+  const stock = +document.getElementById("invStock").value;
+
+  if(!name || price<=0 || stock<0){
+    alert("Data tidak valid");
+    return;
+  }
+
+  INVENTORY.push({
+    id: Date.now(),
+    name, price, stock
+  });
+
+  saveInventory();
+  renderInventory();
+  if(typeof renderPOS==="function") renderPOS();
+}
+
+function editInventory(idx){
+  const i = INVENTORY[idx];
+  const name = prompt("Nama Item", i.name);
+  const price = +prompt("Harga", i.price);
+  const stock = +prompt("Stok", i.stock);
+
+  if(!name || price<=0 || stock<0) return;
+
+  i.name = name;
+  i.price = price;
+  i.stock = stock;
+
+  saveInventory();
+  renderInventory();
+  if(typeof renderPOS==="function") renderPOS();
+}
+
+function deleteInventory(idx){
+  if(!confirm("Hapus item ini?")) return;
+  INVENTORY.splice(idx,1);
+  saveInventory();
+  renderInventory();
+  if(typeof renderPOS==="function") renderPOS();
+}
+
+/* ================= INIT ================= */
+document.addEventListener("DOMContentLoaded", ()=>{
+  // sinkron awal ke POS
+  window.INVENTORY_POS = INVENTORY.map(i=>({ ...i }));
+  localStorage.setItem("INVENTORY_POS", JSON.stringify(INVENTORY_POS));
+  renderInventory();
+});
+/* ===================================================
+   MEMBER SYSTEM — TITAN
+   - CRUD member
+   - Level (regular / vip)
+   - Diskon otomatis ke POS
+   - History transaksi
+   - Point basic
+=================================================== */
+
+/* ================= STATE ================= */
+let MEMBERS = JSON.parse(localStorage.getItem("MEMBERS")) || [];
+
+/* ================= UTIL ================= */
+function saveMembers(){
+  localStorage.setItem("MEMBERS", JSON.stringify(MEMBERS));
+}
+
+/* ================= RENDER ================= */
+function renderMember(){
+  const el = document.getElementById("member");
+  if(!el) return;
+
+  el.innerHTML = `
+    <div class="card">
+      <h3>👥 Member</h3>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <input id="memName" placeholder="Nama Member">
+        <select id="memLevel">
+          <option value="regular">REGULAR</option>
+          <option value="vip">VIP</option>
+        </select>
+        <button class="btn-gold" onclick="addMember()">Tambah</button>
+      </div>
+
+      ${MEMBERS.length === 0 ? `
+        <p>Belum ada member</p>
+      ` : MEMBERS.map((m,idx)=>`
+        <div class="card" style="background:rgba(255,255,255,.05)">
+          <b>${m.name}</b>
+          <span style="margin-left:8px;padding:2px 6px;border-radius:6px;background:#eee;color:#000;font-size:11px">
+            ${m.level.toUpperCase()}
+          </span><br>
+
+          ID: ${m.id}<br>
+          Point: <b>${m.point}</b><br>
+          Transaksi: ${m.history.length}
+
+          <div style="margin-top:6px;display:flex;gap:6px">
+            <button class="btn-dark" onclick="editMember(${idx})">Edit</button>
+            <button class="btn-dark" onclick="deleteMember(${idx})">Hapus</button>
+          </div>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+/* ================= CRUD ================= */
+function addMember(){
+  const name = document.getElementById("memName").value.trim();
+  const level = document.getElementById("memLevel").value;
+
+  if(!name) return alert("Nama wajib diisi");
+
+  MEMBERS.push({
+    id: "MBR-" + Date.now().toString().slice(-6),
+    name,
+    level,
+    point: 0,
+    history: []
+  });
+
+  saveMembers();
+  renderMember();
+  if(typeof renderPOS==="function") renderPOS();
+}
+
+function editMember(idx){
+  const m = MEMBERS[idx];
+  const name = prompt("Nama Member", m.name);
+  const level = prompt("Level (regular/vip)", m.level);
+
+  if(!name || !["regular","vip"].includes(level)) return;
+
+  m.name = name;
+  m.level = level;
+
+  saveMembers();
+  renderMember();
+  if(typeof renderPOS==="function") renderPOS();
+}
+
+function deleteMember(idx){
+  if(!confirm("Hapus member ini?")) return;
+  MEMBERS.splice(idx,1);
+  saveMembers();
+  renderMember();
+  if(typeof renderPOS==="function") renderPOS();
+}
+
+/* ================= POS INTEGRATION ================= */
+/*
+  Hook yang akan dipanggil dari pos.js
+  - Diskon:
+    regular = 5%
+    vip = 10%
+  - Point: 1 point / 10.000
+*/
+
+function getMemberDiscount(memberId){
+  const m = MEMBERS.find(x=>x.id===memberId);
+  if(!m) return 0;
+  return m.level === "vip" ? 0.10 : 0.05;
+}
+
+function memberAfterTransaction(memberId, amount){
+  const m = MEMBERS.find(x=>x.id===memberId);
+  if(!m) return;
+
+  const point = Math.floor(amount / 10000);
+  m.point += point;
+
+  m.history.push({
+    time: Date.now(),
+    total: amount,
+    point
+  });
+
+  saveMembers();
+}
+
+/* ================= INIT ================= */
+document.addEventListener("DOMContentLoaded", ()=>{
+  renderMember();
+});
+/* ===================================================
+   REPORT ENGINE — TITAN
+   - Rental (Room)
+   - POS
+   - Member (diskon & history)
+   - Tampilan tabel
+=================================================== */
+
+/* ================= STATE ================= */
+let REPORT = JSON.parse(localStorage.getItem("REPORT")) || {
+  rental: [],
+  pos: []
+};
+
+/* ================= UTIL ================= */
+function saveReport(){
+  localStorage.setItem("REPORT", JSON.stringify(REPORT));
+}
+
+/* ================= HOOK DARI ROOM =================
+   Dipanggil otomatis saat stopRoom()
+*/
+(function hookRoomReport(){
+  if(typeof stopRoom !== "function") return;
+
+  const _stopRoom = stopRoom;
+  window.stopRoom = function(id){
+    const r = ROOMS.find(x=>x.id===id);
+    if(r && r.total > 0){
+      REPORT.rental.push({
+        time: Date.now(),
+        room: r.id,
+        type: r.type,
+        duration: r.duration,
+        total: Math.round(r.total)
+      });
+      saveReport();
+    }
+    _stopRoom(id);
+  };
+})();
+
+/* ================= HOOK DARI POS =================
+   Dipanggil saat confirmPrint()
+*/
+(function hookPOSReport(){
+  if(typeof confirmPrint !== "function") return;
+
+  const _confirmPrint = confirmPrint;
+  window.confirmPrint = function(){
+    // simpan report POS sebelum reset
+    if(POS && POS.cart.length){
+      REPORT.pos.push({
+        time: Date.now(),
+        items: POS.cart.map(i=>({
+          name: i.name,
+          qty: i.qty,
+          total: i.total
+        })),
+        total: POS.total
+      });
+      saveReport();
+    }
+    _confirmPrint();
+  };
+})();
+
+/* ================= RENDER ================= */
+function renderReport(){
+  const el = document.getElementById("report");
+  if(!el) return;
+
+  el.innerHTML = `
+    <div class="card">
+      <h3>📊 Report</h3>
+
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button class="btn-dark" onclick="showRentalReport()">Rental</button>
+        <button class="btn-dark" onclick="showPOSReport()">POS</button>
+      </div>
+
+      <table style="width:100%;border-collapse:collapse">
+        <thead id="reportHead"></thead>
+        <tbody id="reportBody"></tbody>
+      </table>
+    </div>
+  `;
+}
+
+/* ================= VIEW: RENTAL ================= */
+function showRentalReport(){
+  document.getElementById("reportHead").innerHTML = `
+    <tr>
+      <th>Waktu</th>
+      <th>Room</th>
+      <th>Tipe</th>
+      <th>Durasi</th>
+      <th>Total</th>
+    </tr>
+  `;
+  document.getElementById("reportBody").innerHTML =
+    REPORT.rental.map(r=>`
+      <tr>
+        <td>${new Date(r.time).toLocaleString()}</td>
+        <td>${r.room}</td>
+        <td>${r.type.toUpperCase()}</td>
+        <td>${secToTime(r.duration)}</td>
+        <td>${rupiah(r.total)}</td>
+      </tr>
+    `).join("");
+}
+
+/* ================= VIEW: POS ================= */
+function showPOSReport(){
+  document.getElementById("reportHead").innerHTML = `
+    <tr>
+      <th>Waktu</th>
+      <th>Item</th>
+      <th>Total</th>
+    </tr>
+  `;
+  document.getElementById("reportBody").innerHTML =
+    REPORT.pos.map(p=>`
+      <tr>
+        <td>${new Date(p.time).toLocaleString()}</td>
+        <td>${p.items.map(i=>i.name+" x"+i.qty).join(", ")}</td>
+        <td>${rupiah(p.total)}</td>
+      </tr>
+    `).join("");
+}
+
+/* ================= INIT ================= */
+document.addEventListener("DOMContentLoaded", ()=>{
+  renderReport();
+});
+/* ===================================================
+   TITAN AUTOSAVE & RECOVERY
+   - Autosave periodik
+   - Save saat tab ditutup / refresh
+   - Recovery data penting
+=================================================== */
+
+/* ================= SAFE SAVE ================= */
+function titanSafeSave(){
+  try{
+    if(typeof OMZET !== "undefined"){
+      localStorage.setItem("OMZET", JSON.stringify(OMZET));
+    }
+    if(typeof ROOMS !== "undefined"){
+      localStorage.setItem("ROOMS", JSON.stringify(ROOMS));
+    }
+    if(typeof INVENTORY !== "undefined"){
+      localStorage.setItem("INVENTORY", JSON.stringify(INVENTORY));
+    }
+    if(typeof INVENTORY_POS !== "undefined"){
+      localStorage.setItem("INVENTORY_POS", JSON.stringify(INVENTORY_POS));
+    }
+    if(typeof POS !== "undefined"){
+      localStorage.setItem("POS_STATE", JSON.stringify(POS));
+    }
+    if(typeof MEMBERS !== "undefined"){
+      localStorage.setItem("MEMBERS", JSON.stringify(MEMBERS));
+    }
+    if(typeof REPORT !== "undefined"){
+      localStorage.setItem("REPORT", JSON.stringify(REPORT));
+    }
+    if(typeof SESSION !== "undefined"){
+      localStorage.setItem("SESSION", JSON.stringify(SESSION));
+    }
+  }catch(e){
+    console.warn("[TITAN AUTOSAVE ERROR]", e);
+  }
+}
+
+/* ================= AUTO LOOP ================= */
+setInterval(()=>{
+  titanSafeSave();
+}, 3000);
+
+/* ================= PAGE VISIBILITY ================= */
+document.addEventListener("visibilitychange", ()=>{
+  if(document.hidden){
+    titanSafeSave();
+  }
+});
+
+/* ================= BEFORE UNLOAD ================= */
+window.addEventListener("beforeunload", ()=>{
+  titanSafeSave();
+});
+
+/* ================= RECOVERY ================= */
+(function titanRecovery(){
+  try{
+    const savedOmzet = JSON.parse(localStorage.getItem("OMZET"));
+    if(typeof savedOmzet === "number"){
+      window.OMZET = savedOmzet;
+      if(typeof renderDashboard==="function") renderDashboard();
+    }
+  }catch(e){}
+})();
+/* ===================================================
+   FINAL INTEGRATIONS — TITAN
+   - Member discount → POS
+   - Member point & history
+   - Role lock
+   - Sanity check
+=================================================== */
+
+/* ================= MEMBER DISCOUNT IN POS =================
+   RULE:
+   - REGULAR : 5%
+   - VIP     : 10%
+*/
+(function integrateMemberDiscount(){
+  if(typeof POS === "undefined") return;
+  if(typeof MEMBERS === "undefined") return;
+
+  // extend POS state
+  POS.memberId = null;
+  POS.discount = 0;
+
+  // patch renderPOS to add member selector
+  const _renderPOS = renderPOS;
+  window.renderPOS = function(){
+    _renderPOS();
+
+    const el = document.getElementById("pos");
+    if(!el) return;
+
+    // inject member selector (top)
+    const wrap = document.createElement("div");
+    wrap.style.marginBottom = "10px";
+    wrap.innerHTML = `
+      <select id="posMember">
+        <option value="">— Tanpa Member —</option>
+        ${MEMBERS.map(m=>`
+          <option value="${m.id}">
+            ${m.name} (${m.level.toUpperCase()})
+          </option>
+        `).join("")}
+      </select>
+    `;
+    el.querySelector(".card").prepend(wrap);
+
+    document.getElementById("posMember").onchange = e=>{
+      POS.memberId = e.target.value || null;
+      POS.discount = POS.memberId
+        ? getMemberDiscount(POS.memberId)
+        : 0;
+      updatePOSTotal();
+    };
+  };
+
+  // override calculate total
+  window.updatePOSTotal = function(){
+    POS.total = POS.cart.reduce((s,i)=>s+i.total,0);
+    const final = Math.round(POS.total * (1 - POS.discount));
+
+    const totalBox = document.querySelector("#pos b");
+    if(totalBox){
+      totalBox.innerText = rupiah(final);
+    }
+  };
+})();
+
+/* ================= HOOK MEMBER AFTER TRANSACTION ================= */
+(function hookMemberAfterTransaction(){
+  if(typeof confirmPrint !== "function") return;
+
+  const _confirmPrint = confirmPrint;
+  window.confirmPrint = function(){
+    const totalFinal = POS.discount
+      ? Math.round(POS.total * (1 - POS.discount))
+      : POS.total;
+
+    if(POS.memberId){
+      memberAfterTransaction(POS.memberId, totalFinal);
+    }
+
+    _confirmPrint();
+  };
+})();
+
+/* ================= ROLE LOCK ================= */
+(function roleLock(){
+  if(typeof isKasir !== "function") return;
+  if(!isKasir()) return;
+
+  const hidePages = ["inventory","member","report"];
+  hidePages.forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.style.display = "none";
+  });
+})();
+
+/* ================= SANITY CHECK ================= */
+(function titanSanity(){
+  const req = [
+    "renderDashboard",
+    "renderRoom",
+    "renderPOS",
+    "renderInventory",
+    "renderMember",
+    "renderReport"
+  ];
+
+  req.forEach(fn=>{
+    if(typeof window[fn] !== "function"){
+      console.warn("[TITAN] Missing function:", fn);
+    }
+  });
+
+  console.log(
+    "%cPSKUY ULTRA — TITAN READY",
+    "color:#4ef6d2;font-size:18px;font-weight:bold"
+  );
+})();
